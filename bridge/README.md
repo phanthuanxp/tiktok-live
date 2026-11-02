@@ -62,6 +62,16 @@ Quà gửi dồn (combo) chỉ tính **phần tăng thêm** nên không bị c�
 
 ---
 
+## 🩺 Kiểm tra đường dây trước khi live (nên chạy đầu tiên)
+
+Double-click **`KIEM-TRA.bat`**. Nó kiểm tra lần lượt: cấu hình → mạng tới VPS →
+token → giọng đọc, rồi **in ra đúng đường dẫn để dán vào OBS** (đã kèm token).
+
+Mỗi lỗi đều kèm cách sửa, ví dụ token không khớp hay Tailscale chưa bật.
+Chỉ khi thấy `✅ ĐƯỜNG DÂY THÔNG` mới nên lên sóng.
+
+---
+
 ## 🧪 Thử không cần Live thật
 
 **Chế độ in thử (không gửi lên VPS)** — đặt trong `.env`:
