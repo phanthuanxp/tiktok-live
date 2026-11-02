@@ -5,7 +5,10 @@ services:
     container_name: temple-rpc
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Mặc định CHỈ nghe localhost (an toàn: không lộ ra Internet).
+      # Dùng Tailscale/VPN: đặt BIND_ADDR=<IP tailnet của VPS> trong .env
+      # Chỉ đặt 0.0.0.0 khi đã có HTTPS + giới hạn truy cập ở tầng trước.
+      - "${BIND_ADDR:-127.0.0.1}:3000:3000"
     environment:
       - PORT=3000
       # Kiến trúc A: KHÔNG tự động kết nối TikTok trên VPS.

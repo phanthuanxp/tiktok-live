@@ -64,7 +64,7 @@ services:
     container_name: temple-rpc
     restart: unless-stopped
     ports:
-      - "${PORT}:3000"
+      - "${BIND_ADDR:-127.0.0.1}:${PORT}:3000"
     environment:
       - PORT=3000
       - TIKTOK_USER=
