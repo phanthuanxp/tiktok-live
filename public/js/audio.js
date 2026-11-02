@@ -121,32 +121,38 @@ class TempleAudioEngine {
     // Quãng 5 trầm (Đô – Sol), lệch nhẹ cao độ để tạo rung êm như tiếng tụng.
     const droneFilter = ctx.createBiquadFilter();
     droneFilter.type = 'lowpass';
-    droneFilter.frequency.setValueAtTime(520, ctx.currentTime);
+    droneFilter.frequency.setValueAtTime(1300, ctx.currentTime);
     droneFilter.Q.setValueAtTime(0.6, ctx.currentTime);
 
     const droneGain = ctx.createGain();
     droneGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    droneGain.gain.linearRampToValueAtTime(0.085, ctx.currentTime + 6); // vào rất chậm, không giật
+    droneGain.gain.linearRampToValueAtTime(0.095, ctx.currentTime + 5); // vào chậm, không giật
 
     droneFilter.connect(droneGain);
     droneGain.connect(this.synthBus);
 
     this.droneNodes = [droneFilter, droneGain];
-    [[130.81, 0], [130.81, 0.6], [196.0, -0.5]].forEach(([freq, detune]) => {
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      osc.detune.setValueAtTime(detune * 100, ctx.currentTime);
-      osc.connect(droneFilter);
-      osc.start();
-      this.droneNodes.push(osc);
-    });
+    // A3 + A3 lệch nhẹ (tạo rung) + E4 cho sáng; A2 rất nhỏ chỉ để giữ phần ấm
+    [[220.0, 0, 1.0], [220.0, 7, 0.9], [329.63, -5, 0.55], [110.0, 0, 0.35]].forEach(
+      ([freq, detune, lvl]) => {
+        const osc = ctx.createOscillator();
+        const og = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        osc.detune.setValueAtTime(detune, ctx.currentTime);
+        og.gain.setValueAtTime(lvl, ctx.currentTime);
+        osc.connect(og);
+        og.connect(droneFilter);
+        osc.start();
+        this.droneNodes.push(osc, og);
+      }
+    );
 
     // Hơi thở: bộ lọc nhấp nhô rất chậm (18 giây/nhịp) cho nền sống động, không tĩnh
     const lfo = ctx.createOscillator();
     const lfoDepth = ctx.createGain();
     lfo.frequency.setValueAtTime(1 / 18, ctx.currentTime);
-    lfoDepth.gain.setValueAtTime(140, ctx.currentTime);
+    lfoDepth.gain.setValueAtTime(320, ctx.currentTime);
     lfo.connect(lfoDepth);
     lfoDepth.connect(droneFilter.frequency);
     lfo.start();
@@ -157,7 +163,7 @@ class TempleAudioEngine {
     // thay vì nghe như nốt đàn điện tử.
     const BOWL_ROOTS = [196.0, 220.0, 261.63, 293.66, 329.63];
     const PARTIALS = [
-      { ratio: 1.0, gain: 1.0, decay: 11 },
+      { ratio: 1.0, gain: 1.0, decay: 9 },
       { ratio: 2.02, gain: 0.42, decay: 8 },
       { ratio: 2.83, gain: 0.26, decay: 6 },
       { ratio: 5.41, gain: 0.12, decay: 3.5 }
@@ -176,7 +182,7 @@ class TempleAudioEngine {
           osc.type = 'sine';
           osc.frequency.setValueAtTime(root * p.ratio, now);
           g.gain.setValueAtTime(0.0001, now);
-          g.gain.linearRampToValueAtTime(0.16 * p.gain, now + 0.02); // gõ gọn
+          g.gain.linearRampToValueAtTime(0.34 * p.gain, now + 0.02); // gõ gọn, rõ tiếng
           g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay); // ngân dài
           osc.connect(g);
           g.connect(this.synthBus);
@@ -187,11 +193,11 @@ class TempleAudioEngine {
           osc.stop(now + p.decay + 0.1);
         });
       } catch (_) {}
-      // Khoảng cách ngẫu nhiên 11–19 giây: nghe tự nhiên, không máy móc
-      this.synthBgTimer = setTimeout(strikeBowl, 11000 + Math.random() * 8000);
+      // Khoảng cách ngẫu nhiên 5–9 giây: đủ dày để không thấy trống
+      this.synthBgTimer = setTimeout(strikeBowl, 5000 + Math.random() * 4000);
     };
 
-    this.synthBgTimer = setTimeout(strikeBowl, 4000);
+    this.synthBgTimer = setTimeout(strikeBowl, 2000);
   }
 
   stopZenAmbience() {
