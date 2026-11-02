@@ -22,6 +22,8 @@ class TempleAudioEngine {
 
     this.useSynthMusicFallback = false;
     this.synthBgTimer = null;
+    this.synthBus = null;      // bus âm lượng riêng cho nền tổng hợp
+    this.droneNodes = [];      // các node của lớp ngân trầm, để dọn khi tắt
     this.bgAudio = new Audio('/assets/bg_chant.m4a');
     this.bgAudio.loop = true;
     this.bgAudio.preload = 'auto';
@@ -107,39 +109,89 @@ class TempleAudioEngine {
   }
 
   startDefaultZenSynthLoop() {
-    if (!this.bgMusicEnabled || this.synthBgTimer) return;
-    const PENTATONIC = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25];
-    let step = 0;
-    const playZenNote = () => {
-      if (!this.bgMusicEnabled || !this.ctx) return;
+    if (!this.bgMusicEnabled || this.synthBgTimer || !this.ctx) return;
+    const ctx = this.ctx;
+
+    // ── Bus âm nền riêng: cho phép hạ tiếng mượt khi có giọng đọc ──────────
+    this.synthBus = ctx.createGain();
+    this.synthBus.gain.setValueAtTime(this.ttsPlaying ? this.getDuckedVolume() : this.bgBaseVolume, ctx.currentTime);
+    this.synthBus.connect(ctx.destination);
+
+    // ── 1. LỚP NGÂN TRẦM LIÊN TỤC (tiếng "Om" của Chánh Điện) ─────────────
+    // Quãng 5 trầm (Đô – Sol), lệch nhẹ cao độ để tạo rung êm như tiếng tụng.
+    const droneFilter = ctx.createBiquadFilter();
+    droneFilter.type = 'lowpass';
+    droneFilter.frequency.setValueAtTime(520, ctx.currentTime);
+    droneFilter.Q.setValueAtTime(0.6, ctx.currentTime);
+
+    const droneGain = ctx.createGain();
+    droneGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    droneGain.gain.linearRampToValueAtTime(0.085, ctx.currentTime + 6); // vào rất chậm, không giật
+
+    droneFilter.connect(droneGain);
+    droneGain.connect(this.synthBus);
+
+    this.droneNodes = [droneFilter, droneGain];
+    [[130.81, 0], [130.81, 0.6], [196.0, -0.5]].forEach(([freq, detune]) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.detune.setValueAtTime(detune * 100, ctx.currentTime);
+      osc.connect(droneFilter);
+      osc.start();
+      this.droneNodes.push(osc);
+    });
+
+    // Hơi thở: bộ lọc nhấp nhô rất chậm (18 giây/nhịp) cho nền sống động, không tĩnh
+    const lfo = ctx.createOscillator();
+    const lfoDepth = ctx.createGain();
+    lfo.frequency.setValueAtTime(1 / 18, ctx.currentTime);
+    lfoDepth.gain.setValueAtTime(140, ctx.currentTime);
+    lfo.connect(lfoDepth);
+    lfoDepth.connect(droneFilter.frequency);
+    lfo.start();
+    this.droneNodes.push(lfo, lfoDepth);
+
+    // ── 2. TIẾNG CHUÔNG XOAY ĐIỂM NHẸ (singing bowl) ──────────────────────
+    // Chuông thật có bồi âm lệch (inharmonic) — chính điểm này làm nó "ra chuông"
+    // thay vì nghe như nốt đàn điện tử.
+    const BOWL_ROOTS = [196.0, 220.0, 261.63, 293.66, 329.63];
+    const PARTIALS = [
+      { ratio: 1.0, gain: 1.0, decay: 11 },
+      { ratio: 2.02, gain: 0.42, decay: 8 },
+      { ratio: 2.83, gain: 0.26, decay: 6 },
+      { ratio: 5.41, gain: 0.12, decay: 3.5 }
+    ];
+    let bowlStep = 0;
+
+    const strikeBowl = () => {
+      if (!this.bgMusicEnabled || !this.ctx || !this.synthBus) return;
       try {
-        const now = this.ctx.currentTime;
-        const freq = PENTATONIC[step % PENTATONIC.length];
-        step++;
-        const vol = (this.ttsPlaying ? this.getDuckedVolume() : this.bgBaseVolume) * 0.18;
-        if (vol <= 0.002) return;
-
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now);
-
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.6);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 4.2);
-
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.onended = () => {
-          osc.disconnect();
-          gain.disconnect();
-        };
-        osc.start(now);
-        osc.stop(now + 4.25);
+        const now = ctx.currentTime;
+        const root = BOWL_ROOTS[bowlStep % BOWL_ROOTS.length];
+        bowlStep++;
+        PARTIALS.forEach((p) => {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(root * p.ratio, now);
+          g.gain.setValueAtTime(0.0001, now);
+          g.gain.linearRampToValueAtTime(0.16 * p.gain, now + 0.02); // gõ gọn
+          g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay); // ngân dài
+          osc.connect(g);
+          g.connect(this.synthBus);
+          osc.onended = () => {
+            try { osc.disconnect(); g.disconnect(); } catch (_) {}
+          };
+          osc.start(now);
+          osc.stop(now + p.decay + 0.1);
+        });
       } catch (_) {}
+      // Khoảng cách ngẫu nhiên 11–19 giây: nghe tự nhiên, không máy móc
+      this.synthBgTimer = setTimeout(strikeBowl, 11000 + Math.random() * 8000);
     };
-    playZenNote();
-    this.synthBgTimer = setInterval(playZenNote, 3600);
+
+    this.synthBgTimer = setTimeout(strikeBowl, 4000);
   }
 
   stopZenAmbience() {
@@ -147,8 +199,29 @@ class TempleAudioEngine {
       this.bgAudio.pause();
     } catch (_) {}
     if (this.synthBgTimer) {
+      clearTimeout(this.synthBgTimer);
       clearInterval(this.synthBgTimer);
       this.synthBgTimer = null;
+    }
+    // Tắt lớp ngân trầm êm dần rồi mới ngắt, tránh tiếng "bụp"
+    if (this.synthBus && this.ctx) {
+      const now = this.ctx.currentTime;
+      try {
+        this.synthBus.gain.cancelScheduledValues(now);
+        this.synthBus.gain.setValueAtTime(this.synthBus.gain.value, now);
+        this.synthBus.gain.linearRampToValueAtTime(0.0001, now + 0.8);
+      } catch (_) {}
+      const bus = this.synthBus;
+      const nodes = this.droneNodes || [];
+      this.synthBus = null;
+      this.droneNodes = [];
+      setTimeout(() => {
+        nodes.forEach((n) => {
+          try { if (typeof n.stop === 'function') n.stop(); } catch (_) {}
+          try { n.disconnect(); } catch (_) {}
+        });
+        try { bus.disconnect(); } catch (_) {}
+      }, 900);
     }
   }
 
@@ -157,6 +230,14 @@ class TempleAudioEngine {
     try {
       if (!this.useSynthMusicFallback && this.bgAudio) {
         this.bgAudio.volume = ducked ? this.getDuckedVolume() : this.bgBaseVolume;
+      }
+      // Nền tổng hợp: hạ/nâng mượt trong 0,4 giây để không cắt ngang lời khấn
+      if (this.synthBus && this.ctx) {
+        const now = this.ctx.currentTime;
+        const target = ducked ? this.getDuckedVolume() : this.bgBaseVolume;
+        this.synthBus.gain.cancelScheduledValues(now);
+        this.synthBus.gain.setValueAtTime(this.synthBus.gain.value, now);
+        this.synthBus.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + 0.4);
       }
     } catch (_) {}
   }

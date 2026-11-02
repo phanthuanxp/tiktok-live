@@ -40,6 +40,26 @@
   }
   window.addEventListener('pointerdown', unlockAudioOnce, { once: true });
 
+  // OBS Browser Source không hề có thao tác chuột, nên nếu chỉ chờ 'pointerdown'
+  // thì âm thanh không bao giờ khởi động → vào sóng là im lặng hoàn toàn cho tới
+  // khi có khán giả tương tác đầu tiên. Vì vậy chủ động mở ngay khi tải trang,
+  // và thử lại vài lần phòng trường hợp trình duyệt bắt đầu ở trạng thái 'suspended'.
+  (function autoStartAudio() {
+    let tries = 0;
+    const tick = () => {
+      tries++;
+      try {
+        audio.ensureContext();
+        if (audio.ctx && audio.ctx.state === 'running') {
+          unlockAudioOnce();
+          return; // đã chạy, dừng thử
+        }
+      } catch (_) {}
+      if (tries < 12) setTimeout(tick, 1000); // thử lại trong ~12 giây
+    };
+    tick();
+  })();
+
   // 3. Vẽ các nén nhang đang cháy trong Lư Hương Đỉnh Đồng (x=540, y=895)
   const incenseHolder = document.getElementById('incenseSticksHolder');
   let renderedStickCount = 0;
