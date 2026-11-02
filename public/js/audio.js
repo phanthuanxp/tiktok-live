@@ -335,9 +335,13 @@ class TempleAudioEngine {
 
   async fetchZeroTtsAudio(text, voice = 'maichi') {
     try {
+      const token = new URLSearchParams(window.location.search).get('token') || '';
       const res = await fetch('/api/tts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'x-rpc-token': token } : {})
+        },
         body: JSON.stringify({ text, voice })
       });
       const data = await res.json();

@@ -38,7 +38,7 @@ ufw enable
 ```
 ⚠️ Mở cổng **3000/tcp** trong Security Group của nhà cung cấp VPS nữa.
 
-**✅ Kiểm tra:** trên máy livestream mở `http://IP_VPS:3000/?obs=1` → thấy Chánh Điện.
+**✅ Kiểm tra:** trên máy livestream mở `http://IP_VPS:3000/?obs=1&token=<RPC_TOKEN>` → thấy Chánh Điện.
 
 > IP nhà thường đổi. Nếu mai không vào được → xin lại IP mới và `ufw allow` lại.
 
@@ -82,14 +82,16 @@ Nếu kênh chưa Live, bridge sẽ chờ — đó là bình thường.
 ```bash
 node test-bridge.js
 ```
-→ Mở `http://IP_VPS:3000/?obs=1`, phải thấy Phật tử đảnh lễ + nghe giọng đọc.
+→ Mở `http://IP_VPS:3000/?obs=1&token=<RPC_TOKEN>`, phải thấy Phật tử đảnh lễ + nghe giọng đọc.
 
 ---
 
 ## BƯỚC 5 — OBS  ⏱️ ~5 phút
 
 1. Tạo **Browser Source**
-   - URL: `http://IP_VPS:3000/?obs=1`
+   - URL: `http://IP_VPS:3000/?obs=1&token=<RPC_TOKEN>`
+     ⚠️ **Phải kèm `&token=`** — không có token thì hiện hình nhưng **không có
+     giọng đọc** (giọng đọc đã được khóa để người lạ không bắt VPS đọc tùy ý).
    - Width **1080**, Height **1920**
 2. ⚠️ **TÍCH "Control audio via OBS"** — không tích thì khán giả **không nghe**
    được giọng đọc và tiếng chuông mõ.
@@ -114,7 +116,7 @@ Chỉ khi cả 4 mục chạy mới mở Live chính thức.
 | Hiện tượng | Nguyên nhân |
 |:---|:---|
 | OBS trắng/không tải | Chưa mở cổng 3000, hoặc sai IP |
-| Có hình nhưng không tiếng | Chưa tích **"Control audio via OBS"** |
+| Có hình nhưng không tiếng | Chưa tích **"Control audio via OBS"**, hoặc URL OBS thiếu `&token=` |
 | Bridge báo `⛔ sai/thiếu RPC_TOKEN` | Token máy livestream khác token VPS |
 | Bridge báo `❌ Không gọi được VPS` | Firewall/Security Group chưa mở cho IP máy này |
 | Bình luận không ra nghi thức | Mỗi người bị giới hạn 3,5 giây/lần (chống spam) — bình thường |

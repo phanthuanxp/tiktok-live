@@ -1147,10 +1147,26 @@ app.post('/rpc', async (req, res) => {
 
 // ZeroTTS HTTP Endpoint (Mai Chi default)
 app.all('/api/tts', async (req, res) => {
+  // Tổng hợp giọng rất tốn CPU → phải có token khi đã bật bảo mật,
+  // nếu không ai cũng gọi được và làm cạn CPU / phình đĩa cache.
+  if (RPC_TOKEN) {
+    const token =
+      req.get('x-rpc-token') ||
+      (req.get('authorization') || '').replace(/^Bearer\s+/i, '') ||
+      req.query?.token ||
+      req.body?.token ||
+      '';
+    if (token !== RPC_TOKEN) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized: cần token để dùng giọng đọc' });
+    }
+  }
   const text = (req.body?.text || req.query?.text || '').trim();
   const voice = (req.body?.voice || req.query?.voice || state.settings.ttsVoice || 'maichi').trim();
   if (!text) {
     return res.status(400).json({ ok: false, error: 'Thiếu nội dung text cần đọc' });
+  }
+  if (text.length > 400) {
+    return res.status(413).json({ ok: false, error: 'Nội dung quá dài (tối đa 400 ký tự)' });
   }
   const result = await zeroTts.synthesize(text, voice);
   res.json(result);
