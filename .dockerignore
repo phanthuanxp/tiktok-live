@@ -1,0 +1,9 @@
+node_modules
+.venv
+.hf-cache
+data
+dist
+.git
+*.log
+*.m4a
+.DS_Store

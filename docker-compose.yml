@@ -1,0 +1,22 @@
+services:
+  temple:
+    build: .
+    image: temple-rpc:latest
+    container_name: temple-rpc
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      # Kiến trúc A: KHÔNG tự động kết nối TikTok trên VPS.
+      # Phần nghe Live sẽ do máy ở VN đảm nhiệm (bridge ở Phase 2).
+      - TIKTOK_USER=
+    volumes:
+      # Dữ liệu công đức + cache giọng đọc: giữ lại khi restart/redeploy
+      - temple-data:/app/data
+      # Cache model ZeroTTS (HuggingFace): tải 1 lần, dùng mãi
+      - temple-hf-cache:/app/.hf-cache
+
+volumes:
+  temple-data:
+  temple-hf-cache:
