@@ -84,7 +84,6 @@ data
 dist
 .git
 *.log
-*.m4a
 .DS_Store
 IGN_EOF
 
