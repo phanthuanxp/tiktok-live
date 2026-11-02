@@ -200,9 +200,13 @@
         method,
         params: { user, wish, ...extraParams }
       };
+      const RPC_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
       const res = await fetch('/rpc', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(RPC_TOKEN ? { 'x-rpc-token': RPC_TOKEN } : {})
+        },
         body: JSON.stringify(body)
       });
       const data = await res.json();

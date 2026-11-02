@@ -613,10 +613,13 @@
   // 8. Kết nối JSON-RPC 2.0 WebSocket & Gửi Lệnh RPC
   let ws = null;
   let rpcId = 1;
+  // Token lấy từ URL (?token=...) để gọi lệnh điều khiển khi server bật RPC_TOKEN.
+  const RPC_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
 
   function connectWebSocket() {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+    const q = RPC_TOKEN ? `?token=${encodeURIComponent(RPC_TOKEN)}` : '';
+    ws = new WebSocket(`${proto}//${window.location.host}/ws${q}`);
 
     ws.onmessage = (event) => {
       try {
@@ -657,7 +660,10 @@
     }
     const res = await fetch('/rpc', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(RPC_TOKEN ? { 'x-rpc-token': RPC_TOKEN } : {})
+      },
       body: JSON.stringify(payload)
     });
     const data = await res.json();

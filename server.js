@@ -8,6 +8,14 @@ const { WebSocketServer } = require('ws');
 const { TikTokLiveConnection, WebcastEvent, ControlEvent } = require('tiktok-live-connector');
 
 const PORT = process.env.PORT || 3000;
+
+// ── Bảo vệ truy cập (bật khi mở ra Internet) ──────────────────────────────
+// Đặt RPC_TOKEN để yêu cầu token cho mọi lệnh ghi/điều khiển (HTTP & WebSocket).
+// Để trống => mở hoàn toàn (chỉ dùng khi chạy nội bộ/localhost).
+const RPC_TOKEN = process.env.RPC_TOKEN || '';
+// Các method CHỈ ĐỌC được phép gọi không cần token (để màn hình OBS hoạt động).
+const PUBLIC_RPC_METHODS = new Set(['temple.getState', 'temple.ttsStatus']);
+
 const DATA_DIR = path.join(__dirname, 'data');
 const TTS_CACHE_DIR = path.join(DATA_DIR, 'tts-cache');
 const STATE_FILE = path.join(DATA_DIR, 'merit-state.json');
@@ -1039,7 +1047,13 @@ function configureAutoSim(enabled) {
 // ============================================================================
 // 7. JSON-RPC 2.0 DISPATCHER
 // ============================================================================
-async function handleRpcCall(method, params = {}) {
+async function handleRpcCall(method, params = {}, authed = false) {
+  // Chặn lệnh ghi/điều khiển nếu đã bật RPC_TOKEN mà chưa xác thực.
+  if (RPC_TOKEN && !authed && !PUBLIC_RPC_METHODS.has(method)) {
+    const e = new Error('Unauthorized: cần token hợp lệ cho thao tác này');
+    e.rpcCode = -32001;
+    throw e;
+  }
   switch (method) {
     case 'temple.getState':
       return getPublicState();
@@ -1114,7 +1128,9 @@ app.post('/rpc', async (req, res) => {
     });
   }
   try {
-    const result = await handleRpcCall(method, params || {});
+    const token = req.get('x-rpc-token') || (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    const authed = Boolean(RPC_TOKEN) && token === RPC_TOKEN;
+    const result = await handleRpcCall(method, params || {}, authed);
     res.json({
       jsonrpc: jsonrpc || '2.0',
       id: id ?? null,
@@ -1124,7 +1140,7 @@ app.post('/rpc', async (req, res) => {
     res.status(200).json({
       jsonrpc: jsonrpc || '2.0',
       id: id ?? null,
-      error: { code: -32000, message: err.message || 'Server error' }
+      error: { code: err.rpcCode || -32000, message: err.message || 'Server error' }
     });
   }
 });
@@ -1160,7 +1176,14 @@ function broadcastNotification(method, params) {
   }
 }
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, request) => {
+  // Xác thực socket qua ?token=... lúc kết nối (OBS không cần → chỉ nhận state).
+  let wsAuthed = false;
+  try {
+    const q = new URL(request.url, 'http://localhost').searchParams;
+    wsAuthed = Boolean(RPC_TOKEN) && q.get('token') === RPC_TOKEN;
+  } catch (_) {}
+
   ws.send(
     JSON.stringify({
       jsonrpc: '2.0',
@@ -1178,7 +1201,9 @@ wss.on('connection', (ws) => {
     }
     if (!msg || !msg.method) return;
     try {
-      const result = await handleRpcCall(msg.method, msg.params || {});
+      // Cho phép token kèm trong từng message để nâng quyền (ngoài token lúc connect).
+      const authed = wsAuthed || (Boolean(RPC_TOKEN) && msg.token === RPC_TOKEN);
+      const result = await handleRpcCall(msg.method, msg.params || {}, authed);
       if (msg.id !== undefined) {
         ws.send(
           JSON.stringify({
@@ -1194,7 +1219,7 @@ wss.on('connection', (ws) => {
           JSON.stringify({
             jsonrpc: '2.0',
             id: msg.id,
-            error: { code: -32000, message: err.message || 'RPC Error' }
+            error: { code: err.rpcCode || -32000, message: err.message || 'RPC Error' }
           })
         );
       }

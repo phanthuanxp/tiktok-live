@@ -11,6 +11,8 @@ services:
       # Kiến trúc A: KHÔNG tự động kết nối TikTok trên VPS.
       # Phần nghe Live sẽ do máy ở VN đảm nhiệm (bridge ở Phase 2).
       - TIKTOK_USER=
+      # Token bảo vệ lệnh điều khiển (HTTP & WS). BẮT BUỘC đặt khi mở ra Internet.
+      - RPC_TOKEN=${RPC_TOKEN:-}
     volumes:
       # Dữ liệu công đức + cache giọng đọc: giữ lại khi restart/redeploy
       - temple-data:/app/data
