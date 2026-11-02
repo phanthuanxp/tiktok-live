@@ -1,0 +1,15 @@
+{
+  "name": "tiktok-live-temple-bridge",
+  "version": "1.0.0",
+  "description": "Cầu nối TikTok Live (chạy ở VN) → JSON-RPC Chùa Linh Ứng trên VPS",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "dependencies": {
+    "tiktok-live-connector": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
